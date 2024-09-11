@@ -359,6 +359,7 @@ private:
 
 std::tuple<jclass, jfieldID, jmethodID, jmethodID> BuildDex(JNIEnv *env, jobject class_loader,
                                                             std::string_view shorty, bool is_static,
+                                                            std::string_view class_name,
                                                             std::string_view method_name,
                                                             std::string_view hooker_class,
                                                             std::string_view callback_name) {
@@ -382,7 +383,8 @@ std::tuple<jclass, jfieldID, jmethodID, jmethodID> BuildDex(JNIEnv *env, jobject
                                       ? TypeDescriptor::Object
                                       : TypeDescriptor::FromDescriptor(static_cast<char>(param)));
     }
-
+    
+    std::string generated_class_name = generated_class_name+class_name.data();
     ClassBuilder cbuilder{dex_file.MakeClass(generated_class_name)};
     if (!generated_source_name.empty()) cbuilder.set_source_file(generated_source_name);
 
@@ -719,7 +721,10 @@ using ::lsplant::IsHooked;
         JUTFString callback_method_name(callback_name);
         auto target_name =
             JNI_Cast<jstring>(JNI_CallObjectMethod(env, target_method, method_get_name));
+        auto target_class_n =
+            JNI_Cast<jstring>(JNI_CallObjectMethod(env, target_class, class_get_name));
         JUTFString target_method_name(target_name);
+        JUTFString target_class_name(target_class_n);
         auto callback_class = JNI_Cast<jclass>(
             JNI_CallObjectMethod(env, callback_method, method_get_declaring_class));
         auto callback_class_loader =
@@ -736,8 +741,9 @@ using ::lsplant::IsHooked;
             BuildDex(env, callback_class_loader,
                      __builtin_expect(is_proxy, 0) ? GetProxyMethodShorty(env, target_method)
                                                    : ArtMethod::GetMethodShorty(env, target_method),
-                     is_static, target->IsConstructor() ? "constructor" : target_method_name.get(),
+                     is_static,target_class_name.get(), target->IsConstructor() ? "constructor" : target_method_name.get(),
                      class_name.get(), callback_method_name.get()));
+
         if (!built_class || !hooker_field || !hook_method || !backup_method) {
             LOGE("Failed to generate hooker");
             return nullptr;
